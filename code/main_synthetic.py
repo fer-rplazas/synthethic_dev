@@ -72,6 +72,8 @@ def score_dataset(
             "svm_valid",
             "cnn1d_train",
             "cnn1d_valid",
+            "fft_train",
+            "fft_valid",
             "cnn2d_train",
             "cnn2d_valid",
             "ar_train",
@@ -101,7 +103,7 @@ def score_dataset(
 
     scores["svm_train"], scores["svm_valid"] = cls.classify()
 
-    # SVM:
+    # SVM AR:
     cls = SVMClassifier(
         dataset.X_features_ar_train,
         dataset.X_features_ar_valid,
@@ -114,6 +116,18 @@ def score_dataset(
     # 1D-CNN:
     module = Module.with_defaults_1d(data.signal.shape[0])
     scores["cnn1d_train"], scores["cnn1d_valid"] = score_module(
+        module,
+        dataset.train_dataloader(),
+        dataset.valid_dataloader(),
+        accelerator,
+        device,
+    )
+
+    # FFT-based:
+    module = Module.with_defaults_fft(
+        data.signal.shape[0], dataset.X_train[0].shape[-1]
+    )
+    scores["fft_train"], scores["fft_valid"] = score_module(
         module,
         dataset.train_dataloader(),
         dataset.valid_dataloader(),
@@ -166,6 +180,8 @@ def prepare_runs(name: str) -> Path:
                 "svm_ar_valid",
                 "cnn1d_train",
                 "cnn1d_valid",
+                "fft_train",
+                "fft_valid",
                 "cnn2d_train",
                 "cnn2d_valid",
                 "ar_train",
