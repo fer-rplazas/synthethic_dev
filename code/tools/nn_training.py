@@ -4,6 +4,7 @@ import torch
 from sklearn.metrics import balanced_accuracy_score
 from torch import nn
 
+from typing import Any
 from .arch import create_model
 
 
@@ -39,9 +40,6 @@ class Module(pl.LightningModule):
 
     @classmethod
     def with_defaults_fft(cls, n_in: int, n_samples: int):
-        # return cls(
-        #     "cnn1d", {"n_channels": n_in}, "Adam", {"lr": 1e-3, "weight_decay": 1e-4}
-        # )
         return cls(
             "dotfft",
             {"n_channels": n_in, "n_samples": n_samples, "n_hidden": 10, "depth": 10},
@@ -117,13 +115,15 @@ class Module(pl.LightningModule):
 
         return {"loss": loss, "bal_acc": bal_acc}
 
-    def training_epoch_end(self, outs):
+    def training_epoch_end(self, metrics):
 
-        losses = np.array([out["loss"].detach().cpu().numpy() for out in outs])
-        bal_accs = np.array([out["bal_acc"] for out in outs])
+        loss = np.array(
+            [metric["loss"].detach().cpu().numpy() for metric in metrics]
+        ).mean()
+        bal_acc = np.array([metric["bal_acc"] for metric in metrics]).mean()
 
-        self.log("train/bal_acc", np.mean(bal_accs))
-        self.log("train/loss", np.mean(losses))
+        self.log("train/bal_acc", loss)
+        self.log("train/loss", bal_acc)
 
     def validation_step(self, batch, _):
 
@@ -138,13 +138,16 @@ class Module(pl.LightningModule):
 
         return {"loss": loss, "bal_acc": bal_acc}
 
-    def validation_epoch_end(self, outs):
+    def validation_epoch_end(self, metrics):
 
-        losses = np.array([out["loss"].detach().cpu().numpy() for out in outs])
-        bal_accs = np.array([out["bal_acc"] for out in outs])
-        self.score = (1 - np.mean(losses)) + np.mean(bal_accs)
-        self.log("valid/bal_acc", np.mean(bal_accs))
-        self.log("valid/loss", np.mean(losses))
+        loss = np.array(
+            [metric["loss"].detach().cpu().numpy() for metric in metrics]
+        ).mean()
+        bal_acc = np.array([metric["bal_acc"] for metric in metrics]).mean()
+        self.score = (1 - loss) + bal_acc
+
+        self.log("valid/bal_acc", bal_acc)
+        self.log("valid/loss", loss)
         self.log("valid/score", self.score)
 
 
@@ -196,19 +199,6 @@ class ModuleAR(pl.LightningModule):
                 ],
                 **self.hparams.optimizer_hparams
             )
-            # optimizer = torch.optim.AdamW(
-            #     [
-            #         {"params": self.model.feat_encoder.parameters()},
-            #         {"params": self.model.combiner.parameters()},
-            #         {"params": self.model.AR.parameters()},
-            #         {
-            #             "params": self.model.convs.parameters(),
-            #             "lr": 1e-1,
-            #             "weight_decay": 1e-8,
-            #         },
-            #     ],
-            #     **self.hparams.optimizer_hparams
-            # )
         else:
             raise ValueError("optimizer_name not recognized")
 
@@ -219,12 +209,14 @@ class ModuleAR(pl.LightningModule):
 
     def training_step(self, batch, _):
 
+        # Unpack sequence data in batch:
         signals = torch.stack(
             [el[0] for el in batch]
         ).float()  # (n_seq, n_batch, n_chan, n_times)
         feats = torch.stack([el[1] for el in batch]).float()  # (n_seq, n_batch, n_feat)
         ys = torch.stack([el[2] for el in batch]).float()  # (n_seq, n_batch)
 
+        # Get logits for each sequence step:
         logits = self.model(signals, feats)  # (n_seq, n_batch)
 
         if self.use_mixup:
@@ -243,10 +235,11 @@ class ModuleAR(pl.LightningModule):
             )
             y_mixup = lambdas * y_mixup[: n // 2] + (1 - lambdas) * y_mixup[n // 2 :]
 
-            loss = self.loss_module(logits_mixup, y_mixup.float())
+            loss = self.loss_module(logits_mixup, y_mixup)
         else:
             loss = self.loss_module(torch.flatten(logits), torch.flatten(ys))
 
+        # Compute metrics based only on last sequence element:
         preds = torch.sigmoid(logits[-1, :]) > 0.5
         bal_acc = balanced_accuracy_score(
             ys[-1, :].detach().cpu().numpy().squeeze(),
@@ -255,13 +248,15 @@ class ModuleAR(pl.LightningModule):
 
         return {"loss": loss, "bal_acc": bal_acc}
 
-    def training_epoch_end(self, outs):
+    def training_epoch_end(self, metrics: list[dict[str, Any]]):
 
-        losses = np.array([out["loss"].detach().cpu().numpy() for out in outs])
-        bal_accs = np.array([out["bal_acc"] for out in outs])
+        loss = np.array(
+            [metric["loss"].detach().cpu().numpy() for metric in metrics]
+        ).mean()
+        bal_acc = np.array([metric["bal_acc"] for metric in metrics]).mean()
 
-        self.log("train/bal_acc", np.mean(bal_accs))
-        self.log("train/loss", np.mean(losses))
+        self.log("train/bal_acc", bal_acc)
+        self.log("train/loss", loss)
 
     def validation_step(self, batch, _):
 
@@ -281,16 +276,18 @@ class ModuleAR(pl.LightningModule):
 
         return {"loss": loss, "bal_acc": bal_acc}
 
-    def validation_epoch_end(self, outs):
+    def validation_epoch_end(self, metrics: list[dict[str, Any]]):
 
-        losses = np.array([out["loss"].detach().cpu().numpy() for out in outs])
-        bal_accs = np.array([out["bal_acc"] for out in outs])
-        self.running_score = (1 - np.mean(losses)) + np.mean(bal_accs)
+        loss = np.array(
+            [metric["loss"].detach().cpu().numpy() for metric in metrics]
+        ).mean()
+        bal_acc = np.array([metric["bal_acc"] for metric in metrics]).mean()
+        self.score = (1 - loss) + bal_acc
 
         self.log_dict(
             {
-                "valid/bal_acc": np.mean(bal_accs),
-                "valid/loss": np.mean(losses),
-                "valid/score": self.running_score,
+                "valid/bal_acc": bal_acc,
+                "valid/loss": loss,
+                "valid/score": self.score,
             }
         )

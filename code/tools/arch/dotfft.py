@@ -30,8 +30,7 @@ class ComplexDotProduct(nn.Module):
             torch.sum(w_ * x, dim=1) for w_ in torch.unbind(self.weight, 1)
         ]
 
-        x_ = torch.stack(out_channel_acts, dim=1)
-        return x_ + self.bias
+        return torch.stack(out_channel_acts, dim=1) + self.bias
 
 
 class CustomNorm(nn.Module):
@@ -63,7 +62,7 @@ class ComplexFFTNet(nn.Module):
         self.fft_transform = FFTTransformer()
 
         layers = []
-        layers.extend(
+        layers.extend(  # First group:
             [
                 CustomNorm(n_channels),
                 ComplexDotProduct(n_channels, ceil(n_samples / 2 + 1), n_hidden),

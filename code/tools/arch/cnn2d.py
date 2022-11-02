@@ -3,11 +3,11 @@ import torch.nn as nn
 
 
 class ConvLayer(nn.Module):
-    def __init__(self, n_in, n_out, ks=3, **kwargs):
+    def __init__(self, n_in: int, n_out: int, ks: int = 3, stride: int = 1):
 
         super().__init__()
         self.layers = nn.Sequential(
-            nn.Conv2d(n_in, n_out, ks, padding=(ks - 1) // 2, **kwargs),
+            nn.Conv2d(n_in, n_out, ks, padding=(ks - 1) // 2, stride=stride),
             nn.SiLU(),
             nn.BatchNorm2d(n_out),
         )
@@ -16,7 +16,8 @@ class ConvLayer(nn.Module):
         return self.layers(x)
 
 
-def _conv_block(ni, nf, stride):
+def _conv_block(ni: int, nf: int, stride: int):
+    """Bottleneck layer."""
     return nn.Sequential(
         ConvLayer(ni, nf // 4, 1),
         ConvLayer(nf // 4, nf // 4, stride=stride),
@@ -28,7 +29,7 @@ class ResBlock(nn.Module):
     def __init__(self, ni, nf, stride=1):
         super().__init__()
         self.convs = _conv_block(ni, nf, stride)
-        self.idconv = nn.Identity() if ni == nf else ConvLayer(ni, nf, 1)
+        self.idconv = nn.Identity() if ni == nf else ConvLayer(ni, nf, ks=1)
         self.pool = nn.Identity() if stride == 1 else nn.AvgPool2d(2, ceil_mode=True)
 
     def forward(self, x):
@@ -43,13 +44,18 @@ def _resnet_stem(*sizes):
 
 
 class ResNet2d(nn.Module):
-    def __init__(self, n_in, n_out, layers, expansion=1):
+    """ "ResNet2d implementation.
+
+    Adapted from fastai's implementation (https://github.com/fastai/fastbook/blob/master/14_resnet.ipynb)
+    """
+
+    def __init__(self, n_in: int, n_out: int, layers: list[int]):
         super().__init__()
         stem = _resnet_stem(n_in, 32, 32, 64)
         self.block_szs = [64, 64, 128, 256, 512]
-        for i in range(1, 5):
-            self.block_szs[i] *= expansion
-        blocks = [self._make_layer(*o) for o in enumerate(layers)]
+        blocks = [
+            self._make_layer(idx, n_layers) for idx, n_layers in enumerate(layers)
+        ]
         self.layers = nn.Sequential(
             *stem,
             *blocks,
@@ -74,4 +80,4 @@ class ResNet2d(nn.Module):
 
 
 def resnet(n_channels: int):
-    return ResNet2d(n_channels, 1, [4, 4, 4, 5], 4)
+    return ResNet2d(n_channels, 1, [4, 4, 4, 5])

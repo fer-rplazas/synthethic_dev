@@ -55,7 +55,6 @@ class Dataset:
 
         self.bs = batch_size
         N = len(label)
-        self.Fs = Fs
 
         timeseries = timeseries.astype(np.float32)
         if timeseries.ndim < 2:
@@ -94,6 +93,9 @@ class Dataset:
         self.X_valid = list(compress(self.X, np.logical_not(is_train_idx)))
 
         assert all(
+            el.shape == self.X_train[0].shape for el in self.X_train
+        ), "Train data with unexpected shape encountered"
+        assert all(
             el.shape == self.X_valid[0].shape for el in self.X_valid
         ), "Valid data with unexpected shape encountered"
 
@@ -128,7 +130,7 @@ class Dataset:
 
         if (
             ar_len is not None
-        ):  # TODO: For folds that are not first or last, avoid breaks in continuity for AR data
+        ):  # TODO: For folds that are not first or last avoid breaks in continuity in sequence data
             train_with_feats = [
                 (x, feats, y)
                 for (x, y), feats in zip(self.train_data, self.X_features_train_scaled)
@@ -146,7 +148,7 @@ class Dataset:
 
         if feat_ar:
             if ar_len is None:
-                raise ValueError("`ar_len` cannot be None")
+                raise ValueError("To use sequence of features, `ar_len` cannot be None")
 
             self.X_features_ar_train = np.stack(
                 [[x_[1] for x_ in el] for el in self.train_ar]
@@ -159,8 +161,7 @@ class Dataset:
             self.y_ar_valid = [el[-1][2] for el in self.valid_ar]
 
         if tf_transform:
-            stacked = np.stack(self.X)
-            power = wavelet_tf(stacked, Fs).astype(
+            power = wavelet_tf(np.stack(self.X), Fs).astype(
                 np.float32
             )  # (n_samples, n_chans, n_freqs, n_times)
 
