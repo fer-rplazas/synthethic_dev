@@ -274,7 +274,7 @@ class DataGenerator:
 
             gamma0 = (
                 self.cfg["cross_pac"][0] * gamma_pac
-                + (1 - self.cfg["cross-pac"][0]) * gamma_burst
+                + (1 - self.cfg["cross_pac"][0]) * gamma_burst
             )
             gamma1 = (
                 self.cfg["cross_pac"][1] * gamma_pac

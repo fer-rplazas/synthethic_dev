@@ -1,16 +1,15 @@
 from itertools import compress
 
 import numpy as np
-import pytorch_lightning as pl
 import torch
 from mne.time_frequency import tfr_array_morlet
-from sklearn.preprocessing import StandardScaler
+from sklearn.preprocessing import StandardScaler, QuantileTransformer
 
-from .features import FeatureExtractor
+from .feature_extraction import FeatureExtractor
 
 
 def wavelet_tf(timeseries: np.ndarray, fs: float) -> np.ndarray:
-    """Wavelet-based time-frequency decomposition of epoched waveforms 
+    """Wavelet-based time-frequency decomposition of epoched waveforms
 
     Args:
         timeseries (np.ndarray): Shape (n_epochs, n_channels, n_times)
@@ -18,7 +17,7 @@ def wavelet_tf(timeseries: np.ndarray, fs: float) -> np.ndarray:
 
     Returns:
         np.ndarray: Shape (n_epochs, n_channels, n_freqs, n_times_decimated)
-    """    
+    """
 
     frequencies = np.arange(8, 201, 3)
     n_cycles = frequencies / 6
@@ -45,6 +44,7 @@ class Dataset:
         hop_size: float = 0.250,
         batch_size: int = 64,
         tf_transform: bool = False,
+        quantile_transform: bool = False,
         ar_len: int | None = 10,
         n_folds: int = 5,
         fold_id: int = 4,
@@ -60,6 +60,7 @@ class Dataset:
 
         self.timeseries = timeseries
 
+        # Epoch data:
         idx_start = np.arange(0, N - 1, int(Fs * hop_size))
         idx_end = idx_start + int(Fs * window_length)
         while idx_end[-1] >= N:
@@ -75,6 +76,7 @@ class Dataset:
             for id_start, id_end in zip(idx_start, idx_end)
         ]
 
+        # Train / Validation split:
         assert fold_id < n_folds, "fold_id is greater than number of folds"
         idx = np.ones(len(self.X))
         idx[
@@ -84,7 +86,7 @@ class Dataset:
         ] = 0
         is_train_idx = idx.astype(bool)
 
-        # Timeseries manipulations:
+        # Prepare epoched timeseries:
         self.X_train = list(compress(self.X, is_train_idx))
         self.X_valid = list(compress(self.X, np.logical_not(is_train_idx)))
 
@@ -95,10 +97,23 @@ class Dataset:
         self.y_train = list(compress(self.labels, is_train_idx))
         self.y_valid = list(compress(self.labels, np.logical_not(is_train_idx)))
 
+        if quantile_transform:
+            x_train = np.concatenate(self.X_train, axis=-1)
+            qt = QuantileTransformer(n_quantiles=4096).fit(x_train.T)
+            self.X_train = [qt.transform(x_.T).T for x_ in self.X_train]
+            self.X_valid = [qt.transform(x_.T).T for x_ in self.X_valid]
+
+        # z-score timeseries:
+        mean = np.mean([np.mean(x_, axis=-1) for x_ in self.X_train], axis=0)[..., None]
+        std = np.mean([np.std(x_, axis=-1) for x_ in self.X_train], axis=0)[..., None]
+
+        self.X_train = [(x_ - mean) / std for x_ in self.X_train]
+        self.X_valid = [(x_ - mean) / std for x_ in self.X_valid]
+
         self.train_data = [(x, y) for x, y in zip(self.X_train, self.y_train)]
         self.valid_data = [(x, y) for x, y in zip(self.X_valid, self.y_valid)]
 
-        # Feature-space:
+        # Extract and prepare features:
         self.X_features = FeatureExtractor(Fs).extract_features(np.stack(self.X))
 
         self.X_features_train = self.X_features[is_train_idx, :]
@@ -108,7 +123,9 @@ class Dataset:
         self.X_features_train_scaled = self.scaler.transform(self.X_features_train)
         self.X_features_valid_scaled = self.scaler.transform(self.X_features_valid)
 
-        if ar_len is not None:
+        if (
+            ar_len is not None
+        ):  # TODO: For folds that are not first or last, avoid breaks in continuity for AR data
             train_with_feats = [
                 (x, feats, y)
                 for (x, y), feats in zip(self.train_data, self.X_features_train_scaled)

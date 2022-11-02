@@ -14,7 +14,7 @@ from configs import configs
 from tools.data_generation import DataGenerator
 from tools.nn_training import Module, ModuleAR
 from tools.svm import SVMClassifier
-from tools.utils import Dataset
+from tools.data_processing import Dataset
 
 Fs = 2048  # sampling frequency in [Hz]
 T = 1200  # Total simulated dataset length in [s]
@@ -142,9 +142,9 @@ def score_dataset(
     return scores
 
 
-def prepare_runs(name):
+def prepare_runs(name: str) -> Path:
 
-    filepath = Path("_temp") / Path(name).with_suffix(".csv")
+    filepath = Path("_assets") / Path(name).with_suffix(".csv")
 
     if not os.path.exists(filepath):
         df = pd.DataFrame(
@@ -166,9 +166,7 @@ def prepare_runs(name):
     return filepath
 
 
-def sweep_snr(
-    name: os.PathLike, cfg: dict, n_jobs: int = 4, accelerator: str | int = "gpu"
-):
+def sweep_snr(name: str, cfg: dict, n_jobs: int = 4, accelerator: str | int = "gpu"):
     """Prepares database, configures accelerators, and launches parallelized sweep across a range or snrs for the configuration specified in `cfg`"""
     filepath = prepare_runs(name)
 
@@ -212,7 +210,7 @@ def is_int(el: str):
 def main():
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("--name")
+    parser.add_argument("--name", type=str)
     parser.add_argument("--cfg_name", required=False, default=None)
     parser.add_argument("--n_jobs", required=False, default=4, type=int)
     parser.add_argument("--accelerator", required=False, default="gpu", type=str)
