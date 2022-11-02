@@ -43,7 +43,7 @@ class Module(pl.LightningModule):
         #     "cnn1d", {"n_channels": n_in}, "Adam", {"lr": 1e-3, "weight_decay": 1e-4}
         # )
         return cls(
-            "dotffy",
+            "dotfft",
             {"n_channels": n_in, "n_samples": n_samples, "n_hidden": 10, "depth": 10},
             "Adam",
             {"lr": 1e-3, "weight_decay": 1e-5},

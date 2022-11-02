@@ -13,12 +13,12 @@ class FFTTransformer(nn.Module):
 
 
 class ComplexDotProduct(nn.Module):
-    def __init__(self, n_chan: int, n_samp: int, n_out: int):
+    def __init__(self, n_channels: int, n_samp: int, n_out: int):
         super().__init__()
 
         self.register_parameter(
             "weight",
-            nn.Parameter(torch.randn(1, n_out, n_chan, n_samp, dtype=torch.cfloat)),
+            nn.Parameter(torch.randn(1, n_out, n_channels, n_samp, dtype=torch.cfloat)),
         )
         self.register_parameter(
             "bias", nn.Parameter(torch.randn(1, n_out, 1, dtype=torch.cfloat))
@@ -35,14 +35,14 @@ class ComplexDotProduct(nn.Module):
 
 
 class CustomNorm(nn.Module):
-    def __init__(self, n_chan: int, affine: bool = True):
+    def __init__(self, n_channels: int, affine: bool = True):
         super().__init__()
         self.affine = affine
         self.register_parameter(
-            "scale", nn.Parameter(torch.ones(1, n_chan, 1, dtype=torch.cfloat))
+            "scale", nn.Parameter(torch.ones(1, n_channels, 1, dtype=torch.cfloat))
         )
         self.register_parameter(
-            "offset", nn.Parameter(torch.zeros(1, n_chan, 1, dtype=torch.cfloat))
+            "offset", nn.Parameter(torch.zeros(1, n_channels, 1, dtype=torch.cfloat))
         )
 
     def forward(self, x):
@@ -57,7 +57,7 @@ class CustomNorm(nn.Module):
 
 
 class ComplexFFTNet(nn.Module):
-    def __init__(self, n_channels: int, n_samp: int, n_hidden: int, depth: int = 6):
+    def __init__(self, n_channels: int, n_samples: int, n_hidden: int, depth: int = 6):
         super().__init__()
 
         self.fft_transform = FFTTransformer()
@@ -65,8 +65,8 @@ class ComplexFFTNet(nn.Module):
         layers = []
         layers.extend(
             [
-                CustomNorm(n_chan),
-                ComplexDotProduct(n_chan, ceil(n_samp / 2 + 1), n_hidden),
+                CustomNorm(n_channels),
+                ComplexDotProduct(n_channels, ceil(n_samples / 2 + 1), n_hidden),
             ]
         )
 
@@ -74,7 +74,7 @@ class ComplexFFTNet(nn.Module):
             layers.extend(
                 [
                     CustomNorm(n_hidden),
-                    ComplexDotProduct(n_hidden, ceil(n_samp / 2 + 1), n_hidden),
+                    ComplexDotProduct(n_hidden, ceil(n_samples / 2 + 1), n_hidden),
                 ]
             )
 
