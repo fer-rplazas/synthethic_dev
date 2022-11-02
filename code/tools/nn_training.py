@@ -122,8 +122,8 @@ class Module(pl.LightningModule):
         ).mean()
         bal_acc = np.array([metric["bal_acc"] for metric in metrics]).mean()
 
-        self.log("train/bal_acc", loss)
-        self.log("train/loss", bal_acc)
+        self.log("train/bal_acc", bal_acc)
+        self.log("train/loss", loss)
 
     def validation_step(self, batch, _):
 

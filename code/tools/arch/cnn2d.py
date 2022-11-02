@@ -46,7 +46,8 @@ def _resnet_stem(*sizes):
 class ResNet2d(nn.Module):
     """ "ResNet2d implementation.
 
-    Adapted from fastai's implementation (https://github.com/fastai/fastbook/blob/master/14_resnet.ipynb)
+    Adapted from `fastai's implementation <https://github.com/fastai/fastbook/blob/master/14_resnet.ipynb)>`,
+    which in turn implements `https://arxiv.org/abs/1812.01187`
     """
 
     def __init__(self, n_in: int, n_out: int, layers: list[int]):
