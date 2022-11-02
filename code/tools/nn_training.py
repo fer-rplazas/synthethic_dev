@@ -13,7 +13,8 @@ class Module(pl.LightningModule):
         model_name: str,
         model_hparams: dict,
         optimizer_name: str,
-        optimizer_hparams,
+        optimizer_hparams: dict,
+        use_mixup: bool = True,
     ):
 
         super().__init__()
@@ -22,10 +23,30 @@ class Module(pl.LightningModule):
         self.model = create_model(model_name, model_hparams)
         self.loss_module = nn.BCEWithLogitsLoss()
 
+        self.use_mixup = use_mixup
+
     @classmethod
     def with_defaults_1d(cls, n_in: int):
+        # return cls(
+        #     "cnn1d", {"n_channels": n_in}, "Adam", {"lr": 1e-3, "weight_decay": 1e-4}
+        # )
         return cls(
-            "cnn1d", {"n_channels": n_in}, "Adam", {"lr": 1e-3, "weight_decay": 1e-4}
+            "cnn1d",
+            {"n_channels": n_in, "compress": True, "depth": 5},
+            "Adam",
+            {"lr": 1e-1, "weight_decay": 1e-8},
+        )
+
+    @classmethod
+    def with_defaults_fft(cls, n_in: int, n_samples: int):
+        # return cls(
+        #     "cnn1d", {"n_channels": n_in}, "Adam", {"lr": 1e-3, "weight_decay": 1e-4}
+        # )
+        return cls(
+            "dotffy",
+            {"n_channels": n_in, "n_samples": n_samples, "n_hidden": 10, "depth": 10},
+            "Adam",
+            {"lr": 1e-3, "weight_decay": 1e-5},
         )
 
     @classmethod
@@ -38,9 +59,22 @@ class Module(pl.LightningModule):
         self.model(x)
 
     def configure_optimizers(self):
+        comp_params, other_params = [], []
+
+        # TODO: Determine whether to use different slope for Compressor
+        for name, param in self.model.named_parameters():
+            # if name.split(".")[-1] == "slope":
+            #     comp_params.append(param)
+            # else:
+            other_params.append(param)
+
         if self.hparams.optimizer_name == "Adam":
             optimizer = torch.optim.AdamW(
-                self.parameters(), **self.hparams.optimizer_hparams
+                [
+                    {"params": comp_params, "lr": 1e-1, "weight_decay": 1e-8},
+                    {"params": other_params},
+                ],
+                **self.hparams.optimizer_hparams
             )
         else:
             raise ValueError("optimizer_name not recognized")
@@ -55,7 +89,26 @@ class Module(pl.LightningModule):
         x, y = batch
 
         logits = self.model(x).squeeze()
-        loss = self.loss_module(logits, y.float())
+
+        if self.use_mixup:
+            logits_mixup = logits.clone()
+            y_mixup = y.clone()
+            if len(logits) % 2 != 0:
+                logits_mixup = logits_mixup[:-1]
+                y_mixup = y_mixup[:-1]
+
+            n = logits_mixup.shape[0]
+            lambdas = torch.rand(n // 2).to(logits.device)
+
+            logits_mixup = (
+                lambdas * logits_mixup[: n // 2]
+                + (1 - lambdas) * logits_mixup[n // 2 :]
+            )
+            y_mixup = lambdas * y_mixup[: n // 2] + (1 - lambdas) * y_mixup[n // 2 :]
+
+            loss = self.loss_module(logits_mixup, y_mixup.float())
+        else:
+            loss = self.loss_module(logits, y.float())
 
         preds = torch.sigmoid(logits) > 0.5
         bal_acc = balanced_accuracy_score(
@@ -102,6 +155,7 @@ class ModuleAR(pl.LightningModule):
         model_hparams: dict,
         optimizer_name: str,
         optimizer_hparams: dict,
+        use_mixup: bool = True,
     ):
 
         super().__init__()
@@ -110,23 +164,51 @@ class ModuleAR(pl.LightningModule):
         self.model = create_model(model_name, model_hparams)
         self.loss_module = nn.BCEWithLogitsLoss()
 
+        self.use_mixup = use_mixup
+
     @classmethod
     def with_defaults(cls, n_in: int, n_feats: int):
         return cls(
             "ARConvs",
             {"n_channels": n_in, "n_feats": n_feats},
             "Adam",
-            {"lr": 1e-3, "weight_decay": 1e-4},
+            {"lr": 1e-1, "weight_decay": 1e-8},
         )
 
     def forward(self, x):
         self.model(x)
 
     def configure_optimizers(self):
+        comp_params, other_params = [], []
+
+        # TODO: Determine whether to use different slope for Compressor
+        for name, param in self.model.named_parameters():
+            # if name.split(".")[-1] == "slope":
+            #     comp_params.append(param)
+            # else:
+            other_params.append(param)
+
         if self.hparams.optimizer_name == "Adam":
             optimizer = torch.optim.AdamW(
-                self.parameters(), **self.hparams.optimizer_hparams
+                [
+                    {"params": comp_params, "lr": 1e-1, "weight_decay": 1e-8},
+                    {"params": other_params},
+                ],
+                **self.hparams.optimizer_hparams
             )
+            # optimizer = torch.optim.AdamW(
+            #     [
+            #         {"params": self.model.feat_encoder.parameters()},
+            #         {"params": self.model.combiner.parameters()},
+            #         {"params": self.model.AR.parameters()},
+            #         {
+            #             "params": self.model.convs.parameters(),
+            #             "lr": 1e-1,
+            #             "weight_decay": 1e-8,
+            #         },
+            #     ],
+            #     **self.hparams.optimizer_hparams
+            # )
         else:
             raise ValueError("optimizer_name not recognized")
 
@@ -144,7 +226,26 @@ class ModuleAR(pl.LightningModule):
         ys = torch.stack([el[2] for el in batch]).float()  # (n_seq, n_batch)
 
         logits = self.model(signals, feats)  # (n_seq, n_batch)
-        loss = self.loss_module(torch.flatten(logits), torch.flatten(ys))
+
+        if self.use_mixup:
+            logits_mixup = torch.flatten(logits).clone()
+            y_mixup = torch.flatten(ys).clone()
+            if len(logits) % 2 != 0:
+                logits_mixup = logits_mixup[:-1]
+                y_mixup = y_mixup[:-1]
+
+            n = logits_mixup.shape[0]
+            lambdas = torch.rand(n // 2).to(logits.device)
+
+            logits_mixup = (
+                lambdas * logits_mixup[: n // 2]
+                + (1 - lambdas) * logits_mixup[n // 2 :]
+            )
+            y_mixup = lambdas * y_mixup[: n // 2] + (1 - lambdas) * y_mixup[n // 2 :]
+
+            loss = self.loss_module(logits_mixup, y_mixup.float())
+        else:
+            loss = self.loss_module(torch.flatten(logits), torch.flatten(ys))
 
         preds = torch.sigmoid(logits[-1, :]) > 0.5
         bal_acc = balanced_accuracy_score(

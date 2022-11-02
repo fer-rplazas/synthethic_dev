@@ -1,11 +1,14 @@
 from torch import nn
 import torch
 
+
 class Compressor(nn.Module):
-    def __init__(self, n_channels: int, amp: float = 5.0):
+    def __init__(self, n_channels: int, amp: float = 0.0):
 
         super().__init__()
-        self.register_parameter("slope", nn.Parameter(amp * torch.randn(1, n_channels, 1)))
+        self.register_parameter(
+            "slope", nn.Parameter(amp * torch.randn(1, n_channels, 1))
+        )
 
     def forward(self, x):
         eps = 1e-8
@@ -29,7 +32,7 @@ class CNN1d(nn.Module):
         depth: int = 7,
         ks: int = 15,
         stride: int = 1,
-        compress: bool = False
+        compress: bool = False,
     ):
 
         super().__init__()
@@ -37,7 +40,7 @@ class CNN1d(nn.Module):
         self.n_hidden = n_hidden
 
         self.convolutional_layers = [
-            Compressor(self.n_hidden) if compress else nn.Identity(),
+            Compressor(n_channels) if compress else nn.Identity(),
             nn.InstanceNorm1d(n_channels, affine=True),  # Initial normalization layer
             nn.Conv1d(n_channels, self.n_hidden, ks, padding="same"),  # Convolution 1
             nn.InstanceNorm1d(self.n_hidden),  # Normalization
@@ -49,8 +52,13 @@ class CNN1d(nn.Module):
                 [
                     Compressor(self.n_hidden) if compress else nn.Identity(),
                     nn.Conv1d(
-                        self.n_hidden, self.n_hidden, ks, stride=stride, padding="same", 
+                        self.n_hidden,
+                        self.n_hidden,
+                        ks,
+                        stride=stride,
+                        padding="same" if stride == 1 else 0,
                     ),  # Convolution
+                    nn.MaxPool1d(2),
                     nn.InstanceNorm1d(self.n_hidden, affine=True),  # Normalization
                     nn.SiLU(),  # Nonlinearity
                 ]

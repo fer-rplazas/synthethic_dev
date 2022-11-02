@@ -8,10 +8,10 @@ class ConvEncoder(nn.Module):
     def __init__(self, n_channels: int = 1, n_hidden: int = 45):
 
         super().__init__()
-        self.cnn = CNN1d(n_channels, n_hidden, n_hidden)
+        self.cnn = CNN1d(n_channels, n_hidden, n_hidden, compress=True, depth=5)
 
     def forward(self, x):
-        # x (n_batch, n_chan, c_times)
+        # x (n_batch, n_chan, n_times)
         return self.cnn(x)  # (n_batch, n_out_feats)
 
 
@@ -20,12 +20,12 @@ class ARModel(nn.Module):
 
         super().__init__()
 
-        self.convs = ConvEncoder(n_channels, 25)
+        self.convs = ConvEncoder(n_channels, 45)
         self.feat_encoder = nn.Sequential(
             nn.BatchNorm1d(n_feats), nn.Linear(n_feats, 5)
         )
         self.combiner = nn.Sequential(
-            nn.Linear(25 + 5, 10), nn.BatchNorm1d(10), nn.SiLU()
+            nn.Linear(45 + 5, 10), nn.BatchNorm1d(10), nn.SiLU()
         )
 
         self.AR = nn.LSTM(10, 3, proj_size=1)
