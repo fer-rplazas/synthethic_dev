@@ -1,27 +1,27 @@
 import argparse
 import os
-import warnings
 from pathlib import Path
 from time import sleep
+import warnings
 
+from joblib import Parallel, delayed
 import numpy as np
 import pandas as pd
 import pytorch_lightning as pl
-from joblib import Parallel, delayed
 from pytorch_lightning.callbacks import ModelCheckpoint
+from torch.cuda import device_count, is_available
 
 from configs import configs
 from tools.data_generation import DataGenerator
+from tools.data_processing import Dataset
 from tools.nn_training import Module, ModuleAR
 from tools.svm import SVMClassifier
-from tools.data_processing import Dataset
 
 Fs = 2048  # sampling frequency in [Hz]
 T = 1200  # Total simulated dataset length in [s]
 window_length = 0.5  # Window length in [s]
 hop_size = 0.4  # Hop size in [s]. Determines overlap between windows
 
-from torch.cuda import device_count, is_available
 
 DEVICE = "gpu" if is_available() else "cpu"
 
@@ -101,6 +101,16 @@ def score_dataset(
 
     scores["svm_train"], scores["svm_valid"] = cls.classify()
 
+    # SVM:
+    cls = SVMClassifier(
+        dataset.X_features_ar_train,
+        dataset.X_features_ar_valid,
+        dataset.y_ar_train,
+        dataset.y_ar_valid,
+    )
+
+    scores["svm_ar_train"], scores["svm_ar_valid"] = cls.classify()
+
     # 1D-CNN:
     module = Module.with_defaults_1d(data.signal.shape[0])
     scores["cnn1d_train"], scores["cnn1d_valid"] = score_module(
@@ -152,6 +162,8 @@ def prepare_runs(name: str) -> Path:
                 "snr",
                 "svm_train",
                 "svm_valid",
+                "svm_ar_train",
+                "svm_ar_valid",
                 "cnn1d_train",
                 "cnn1d_valid",
                 "cnn2d_train",

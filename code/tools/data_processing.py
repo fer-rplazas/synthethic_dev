@@ -46,9 +46,12 @@ class Dataset:
         tf_transform: bool = False,
         quantile_transform: bool = False,
         ar_len: int | None = 10,
+        feat_ar: bool = True,
         n_folds: int = 5,
         fold_id: int = 4,
     ):
+
+        ar_len = None if ar_len == 0 else ar_len
 
         self.bs = batch_size
         N = len(label)
@@ -140,6 +143,20 @@ class Dataset:
 
             for jj in range(len(valid_with_feats) - ar_len):
                 self.valid_ar.append(valid_with_feats[jj : jj + ar_len])
+
+        if feat_ar:
+            if ar_len is None:
+                raise ValueError("`ar_len` cannot be None")
+
+            self.X_features_ar_train = np.stack(
+                [[x_[1] for x_ in el] for el in self.train_ar]
+            ).reshape(-1, ar_len * self.X_features.shape[1])
+            self.y_ar_train = [el[-1][2] for el in self.train_ar]
+
+            self.X_features_ar_valid = np.stack(
+                [[x_[1] for x_ in el] for el in self.valid_ar]
+            ).reshape(-1, ar_len * self.X_features.shape[1])
+            self.y_ar_valid = [el[-1][2] for el in self.valid_ar]
 
         if tf_transform:
             stacked = np.stack(self.X)
