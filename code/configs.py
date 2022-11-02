@@ -10,3 +10,14 @@ configs["beta_gamma"] = {
     "phase_shift": None,
     "burst_length": None,
 }
+
+configs["beta_sharpness"] = {
+    "betas": None,
+    "gammas": None,
+    "beta_sharpness": [0.1, 0.9],
+    "phase": None,
+    "pac": None,
+    "cross_pac": None,
+    "phase_shift": None,
+    "burst_length": None,
+}
