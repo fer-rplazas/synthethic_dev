@@ -4,4 +4,6 @@
 **/.ipynb_checkpoints/
 **/lightning_logs/
 checkpoints/
+*.ipynb
+*.csv
 
