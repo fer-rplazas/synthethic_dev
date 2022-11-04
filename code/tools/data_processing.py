@@ -1,11 +1,13 @@
+from copy import deepcopy
 from itertools import compress
 
+import colorednoise as cn
 from mne.time_frequency import tfr_array_morlet
 import numpy as np
 import pytorch_lightning as pl
 from sklearn.preprocessing import QuantileTransformer, StandardScaler
 import torch
-import colorednoise as cn
+from torch.utils import data
 
 from .feature_extraction import FeatureExtractor
 
@@ -51,7 +53,9 @@ class Dataset(pl.LightningDataModule):
         feat_ar: bool = True,
         n_folds: int = 5,
         fold_id: int = 4,
+        data_aug_intensity: float = 0.3,
     ):
+        self.data_aug_intensity = data_aug_intensity
 
         ar_len = None if ar_len == 0 else ar_len
 
@@ -191,23 +195,24 @@ class Dataset(pl.LightningDataModule):
             self.tf_valid_data = [(x, y) for x, y in zip(self.X_tf_valid, self.y_valid)]
 
     def train_ar_dataloader(self):
-        return torch.utils.data.DataLoader(self.train_ar, self.bs, shuffle=True)
+        dataset = DatasetAR(self.train_ar, self.data_aug_intensity)
+        return data.DataLoader(dataset, self.bs, shuffle=True)
 
     def valid_ar_dataloader(self):
-        return torch.utils.data.DataLoader(self.valid_ar, self.bs, shuffle=False)
+        return data.DataLoader(self.valid_ar, self.bs, shuffle=False)
 
     def train_tf_dataloader(self):
-        return torch.utils.data.DataLoader(self.tf_train_data, self.bs, shuffle=True)
+        return data.DataLoader(self.tf_train_data, self.bs, shuffle=True)
 
     def valid_tf_dataloader(self):
-        return torch.utils.data.DataLoader(self.tf_valid_data, self.bs, shuffle=False)
+        return data.DataLoader(self.tf_valid_data, self.bs, shuffle=False)
 
     def train_dataloader(self):
-        dataset = Dataset1d(self.train_data, 0.1)
-        return torch.utils.data.DataLoader(dataset, self.bs, shuffle=True)
+        dataset = Dataset1d(self.train_data, self.data_aug_intensity)
+        return data.DataLoader(dataset, self.bs, shuffle=True)
 
     def valid_dataloader(self):
-        return torch.utils.data.DataLoader(self.valid_data, self.bs, shuffle=False)
+        return data.DataLoader(self.valid_data, self.bs, shuffle=False)
 
 
 class ColoredNoiseAdder:
@@ -217,17 +222,36 @@ class ColoredNoiseAdder:
         self.intensity = intensity
 
     def __call__(self, signal: np.ndarray):
+        """
+        Args
+        ----
+            signal (np.ndarray): Single signal epoch of shape (n_chan, n_times)
+        """
+
+        if self.intensity == 0.0 or (randomizer := np.random.rand(1))[0] < 0.1:
+            return signal
+
         rms = np.sqrt(np.mean(signal**2, axis=-1))
         noise = cn.powerlaw_psd_gaussian(1, signal.shape)
-
-        randomizer = np.random.rand(1)
 
         return torch.tensor(
             signal + self.intensity * rms[..., None] * noise * randomizer
         ).float()
 
 
-class Dataset1d(torch.utils.data.Dataset):
+class DatasetAR(data.Dataset):
+    def __init__(self, train_data: list, intensity: float = 0.1):
+        self.train_data = train_data
+        self.transform = ColoredNoiseAdder(intensity)
+
+    def __len__(self):
+        return len(self.train_data)
+
+    def __getitem__(self, idx):
+        return [(self.transform(el[0]), el[1], el[2]) for el in self.train_data[idx]]
+
+
+class Dataset1d(data.Dataset):
     def __init__(self, train_data: list, intensity: float = 0.1):
 
         self.train_data = train_data

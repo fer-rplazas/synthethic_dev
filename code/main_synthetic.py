@@ -9,6 +9,7 @@ import numpy as np
 import pandas as pd
 import pytorch_lightning as pl
 from pytorch_lightning.callbacks import ModelCheckpoint
+from pytorch_lightning.utilities.warnings import PossibleUserWarning
 from torch.cuda import device_count, is_available
 
 from configs import configs
@@ -40,12 +41,13 @@ def score_module(module, train_dataloader, valid_dataloader, accelerator, device
                 save_top_k=1,
             )
         ],
-        max_epochs=150,
+        max_epochs=200,
     )
     with warnings.catch_warnings():
         warnings.filterwarnings(
             "ignore", message="y_pred contains classes not in y_true"
         )
+        warnings.filterwarnings("ignore", category=PossibleUserWarning)
         trainer.fit(module, train_dataloader, valid_dataloader)
         module = module.load_from_checkpoint(
             trainer.checkpoint_callback.best_model_path
