@@ -26,7 +26,7 @@ configs["phase"] = {
     "betas": None,
     "gammas": None,
     "beta_sharpness": None,
-    "phase": [0.3, 0.7],
+    "phase": [0.45, 0.55],
     "pac": None,
     "cross_pac": None,
     "phase_shift": None,
