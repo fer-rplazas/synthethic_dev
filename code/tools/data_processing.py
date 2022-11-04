@@ -1,9 +1,11 @@
 from itertools import compress
 
-import numpy as np
-import torch
 from mne.time_frequency import tfr_array_morlet
-from sklearn.preprocessing import StandardScaler, QuantileTransformer
+import numpy as np
+import pytorch_lightning as pl
+from sklearn.preprocessing import QuantileTransformer, StandardScaler
+import torch
+import colorednoise as cn
 
 from .feature_extraction import FeatureExtractor
 
@@ -34,7 +36,7 @@ def wavelet_tf(timeseries: np.ndarray, fs: float) -> np.ndarray:
     return power
 
 
-class Dataset:
+class Dataset(pl.LightningDataModule):
     def __init__(
         self,
         timeseries: np.ndarray,
@@ -201,7 +203,39 @@ class Dataset:
         return torch.utils.data.DataLoader(self.tf_valid_data, self.bs, shuffle=False)
 
     def train_dataloader(self):
-        return torch.utils.data.DataLoader(self.train_data, self.bs, shuffle=True)
+        dataset = Dataset1d(self.train_data, 0.1)
+        return torch.utils.data.DataLoader(dataset, self.bs, shuffle=True)
 
     def valid_dataloader(self):
         return torch.utils.data.DataLoader(self.valid_data, self.bs, shuffle=False)
+
+
+class ColoredNoiseAdder:
+    """Adds random 1-f noise to a single sample"""
+
+    def __init__(self, intensity: float = 0.1):
+        self.intensity = intensity
+
+    def __call__(self, signal: np.ndarray):
+        rms = np.sqrt(np.mean(signal**2, axis=-1))
+        noise = cn.powerlaw_psd_gaussian(1, signal.shape)
+
+        randomizer = np.random.rand(1)
+
+        return torch.tensor(
+            signal + self.intensity * rms[..., None] * noise * randomizer
+        ).float()
+
+
+class Dataset1d(torch.utils.data.Dataset):
+    def __init__(self, train_data: list, intensity: float = 0.1):
+
+        self.train_data = train_data
+        self.transform = ColoredNoiseAdder(intensity)
+
+    def __len__(self):
+        return len(self.train_data)
+
+    def __getitem__(self, idx):
+        x, y = self.train_data[idx]
+        return self.transform(x), y
