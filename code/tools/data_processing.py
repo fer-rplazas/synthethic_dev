@@ -53,7 +53,7 @@ class Dataset(pl.LightningDataModule):
         feat_ar: bool = True,
         n_folds: int = 5,
         fold_id: int = 4,
-        data_aug_intensity: float = 0.3,
+        data_aug_intensity: float = 0.2,
     ):
         self.data_aug_intensity = data_aug_intensity
 
@@ -67,6 +67,7 @@ class Dataset(pl.LightningDataModule):
             timeseries = timeseries[np.newaxis, ...]
 
         self.timeseries = timeseries
+        self.n_channels = timeseries.shape[0]
 
         # Epoch data:
         idx_start = np.arange(0, N - 1, int(Fs * hop_size))
@@ -194,6 +195,9 @@ class Dataset(pl.LightningDataModule):
             self.tf_train_data = [(x, y) for x, y in zip(self.X_tf_train, self.y_train)]
             self.tf_valid_data = [(x, y) for x, y in zip(self.X_tf_valid, self.y_valid)]
 
+    def get_n_channels(self):
+        return self.n_channels
+
     def train_ar_dataloader(self):
         dataset = DatasetAR(self.train_ar, self.data_aug_intensity)
         return data.DataLoader(dataset, self.bs, shuffle=True)
@@ -229,7 +233,7 @@ class ColoredNoiseAdder:
         """
 
         if self.intensity == 0.0 or (randomizer := np.random.rand(1))[0] < 0.1:
-            return signal
+            return torch.tensor(signal).float()
 
         rms = np.sqrt(np.mean(signal**2, axis=-1))
         noise = cn.powerlaw_psd_gaussian(1, signal.shape)

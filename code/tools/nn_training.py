@@ -78,7 +78,7 @@ class Module(pl.LightningModule):
             raise ValueError("optimizer_name not recognized")
 
         scheduler = torch.optim.lr_scheduler.MultiStepLR(
-            optimizer, milestones=[50, 100], gamma=0.1
+            optimizer, milestones=[50, 100, 150], gamma=0.1
         )
         return [optimizer], [scheduler]
 
@@ -175,7 +175,7 @@ class ModuleAR(pl.LightningModule):
             "ARConvs",
             {"n_channels": n_in, "n_feats": n_feats},
             "Adam",
-            {"lr": 1e-1, "weight_decay": 1e-8},
+            {"lr": 1e-2, "weight_decay": 1e-8},
         )
 
     def forward(self, x):
