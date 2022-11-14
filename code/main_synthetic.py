@@ -1,6 +1,6 @@
 import argparse
 from concurrent.futures import ProcessPoolExecutor
-from multiprocessing import Manager, set_start_method
+from multiprocessing import Manager, get_context
 import os
 from pathlib import Path
 from time import sleep
@@ -25,7 +25,6 @@ hop_size = 0.4  # Hop size in [s]. Determines overlap between windows
 
 
 DEVICE = "gpu" if is_available() else "cpu"
-set_start_method("spawn")
 
 
 def score_module(module, train_dataloader, valid_dataloader, accelerator, device):
@@ -226,7 +225,9 @@ def sweep_snr(name: str, cfg: dict, n_jobs: int = 4, accelerator: str | int = "g
     assert len(devices) == snrs.size, "Problem deciding on gpus for sweep"
 
     async_tasks = []
-    with ProcessPoolExecutor(max_workers=n_jobs) as pool:
+    with ProcessPoolExecutor(
+        max_workers=n_jobs, mp_context=get_context("spawn")
+    ) as pool:
         mgr = Manager()
         lock = mgr.Lock()
         for snr, device in zip(snrs, devices):
