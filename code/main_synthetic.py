@@ -41,7 +41,7 @@ def score_module(module, train_dataloader, valid_dataloader, accelerator, device
                 save_top_k=1,
             )
         ],
-        max_epochs=200,
+        max_epochs=150,
     )
     with warnings.catch_warnings():
         warnings.filterwarnings(
