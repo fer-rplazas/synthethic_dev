@@ -1,6 +1,6 @@
-from .cnn2d import resnet
+from .armodel import ARModel, EnsembleAR
 from .cnn1d import CNN1d
-from .armodel import ARModel
+from .cnn2d import resnet
 from .dotfft import ComplexFFTNet
 
 model_dict = {
@@ -8,6 +8,7 @@ model_dict = {
     "ARConvs": ARModel,
     "cnn2d": resnet,
     "dotfft": ComplexFFTNet,
+    "EnsembleAR": EnsembleAR,
 }
 
 

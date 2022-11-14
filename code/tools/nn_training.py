@@ -1,10 +1,11 @@
+from typing import Any
+
 import numpy as np
 import pytorch_lightning as pl
 import torch
 from sklearn.metrics import balanced_accuracy_score
 from torch import nn
 
-from typing import Any
 from .arch import create_model
 
 
@@ -33,9 +34,9 @@ class Module(pl.LightningModule):
         # )
         return cls(
             "cnn1d",
-            {"n_channels": n_in, "compress": True, "depth": 5},
+            {"n_channels": n_in, "compress": True, "depth": 8},
             "Adam",
-            {"lr": 1e-1, "weight_decay": 1e-8},
+            {"lr": 1e-3, "weight_decay": 1e-8},
         )
 
     @classmethod
@@ -174,6 +175,15 @@ class ModuleAR(pl.LightningModule):
         return cls(
             "ARConvs",
             {"n_channels": n_in, "n_feats": n_feats},
+            "Adam",
+            {"lr": 1e-2, "weight_decay": 1e-8},
+        )
+
+    @classmethod
+    def with_defaults_ensemble(cls, n_in: int, n_feats: int, n_samples: int):
+        return cls(
+            "EnsembleAR",
+            {"n_channels": n_in, "n_feats": n_feats, "n_samples": n_samples},
             "Adam",
             {"lr": 1e-2, "weight_decay": 1e-8},
         )

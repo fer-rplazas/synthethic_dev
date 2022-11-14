@@ -56,7 +56,14 @@ class CustomNorm(nn.Module):
 
 
 class ComplexFFTNet(nn.Module):
-    def __init__(self, n_channels: int, n_samples: int, n_hidden: int, depth: int = 6):
+    def __init__(
+        self,
+        n_channels: int,
+        n_samples: int,
+        n_hidden: int,
+        n_out: int = 1,
+        depth: int = 6,
+    ):
         super().__init__()
 
         self.fft_transform = FFTTransformer()
@@ -81,7 +88,7 @@ class ComplexFFTNet(nn.Module):
 
         self.body = nn.Sequential(*layers)
 
-        self.cls = nn.Sequential(nn.Linear(n_hidden * 2, 1))
+        self.cls = nn.Sequential(nn.Linear(n_hidden * 2, n_out))
 
     def forward(self, x):
 

@@ -21,6 +21,28 @@ class Compressor(nn.Module):
         )
 
 
+class CustomNorm(nn.Module):
+    def __init__(self, n_channels: int, affine: bool = True):
+        super().__init__()
+        self.affine = affine
+        self.register_parameter(
+            "scale", nn.Parameter(torch.ones(1, n_channels, 1, dtype=torch.float))
+        )
+        self.register_parameter(
+            "offset", nn.Parameter(torch.zeros(1, n_channels, 1, dtype=torch.float))
+        )
+
+    def forward(self, x):
+
+        z_scored = (x - torch.mean(x, dim=-1, keepdim=True)) / torch.std(
+            x, dim=-1, keepdim=True
+        )
+
+        if self.affine:
+            return z_scored * self.scale + self.offset
+        return z_scored
+
+
 class CNN1d(nn.Module):
     """Small network with 2 convolutional layers"""
 
@@ -30,7 +52,7 @@ class CNN1d(nn.Module):
         n_out: int = 1,
         n_hidden: int = 45,
         depth: int = 7,
-        ks: int = 15,
+        ks: int = 35,
         stride: int = 1,
         compress: bool = False,
     ):
@@ -39,12 +61,17 @@ class CNN1d(nn.Module):
 
         self.n_hidden = n_hidden
 
+        norm = nn.BatchNorm1d
+        affine = True
         self.convolutional_layers = [
+            norm(n_channels, affine=affine)
+            if compress
+            else nn.Identity(),  # Initial normalization layer
             Compressor(n_channels) if compress else nn.Identity(),
-            nn.InstanceNorm1d(n_channels, affine=True),  # Initial normalization layer
+            norm(n_channels, affine=affine),  # Initial normalization layer
             nn.Conv1d(n_channels, self.n_hidden, ks, padding="same"),  # Convolution 1
-            nn.InstanceNorm1d(self.n_hidden),  # Normalization
             nn.SiLU(),  # Nonlinearity
+            norm(self.n_hidden, affine=affine),  # Normalization
         ]
 
         for _ in range(depth - 1):
@@ -58,9 +85,9 @@ class CNN1d(nn.Module):
                         stride=stride,
                         padding="same" if stride == 1 else 0,
                     ),  # Convolution
-                    nn.MaxPool1d(2),
-                    nn.InstanceNorm1d(self.n_hidden, affine=True),  # Normalization
                     nn.SiLU(),  # Nonlinearity
+                    nn.AvgPool1d(2),
+                    norm(self.n_hidden, affine=affine),  # Normalization
                 ]
             )
 

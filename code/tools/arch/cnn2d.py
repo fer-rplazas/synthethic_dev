@@ -80,5 +80,5 @@ class ResNet2d(nn.Module):
         return self.layers(x)
 
 
-def resnet(n_channels: int):
-    return ResNet2d(n_channels, 1, [4, 4, 4, 5])
+def resnet(n_channels: int, n_out: int = 1):
+    return ResNet2d(n_channels, n_out, [4, 4, 4, 5])
