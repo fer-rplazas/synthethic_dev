@@ -1,22 +1,22 @@
 import argparse
+from concurrent.futures import ProcessPoolExecutor
+from multiprocessing import Manager
 import os
 from pathlib import Path
 from time import sleep
 import warnings
 
-from multiprocessing import Pool, Lock
+from configs import configs
 import numpy as np
 import pandas as pd
 import pytorch_lightning as pl
 from pytorch_lightning.callbacks import ModelCheckpoint
 from pytorch_lightning.utilities.warnings import PossibleUserWarning
-from torch.cuda import device_count, is_available
-
-from configs import configs
 from tools.data_generation import DataGenerator
 from tools.data_processing import Dataset
 from tools.nn_training import Module, ModuleAR
 from tools.svm import SVMClassifier
+from torch.cuda import device_count, is_available
 
 Fs = 2048  # sampling frequency in [Hz]
 T = 1200  # Total simulated dataset length in [s]
@@ -65,7 +65,7 @@ def score_dataset(
     save_to_file=True,
     accelerator: str = "gpu",
     device: list[int] | str = [0],
-    lock: Lock | None = None,
+    lock=None,
 ):
 
     scores = pd.Series(
@@ -224,14 +224,16 @@ def sweep_snr(name: str, cfg: dict, n_jobs: int = 4, accelerator: str | int = "g
 
     assert len(devices) == snrs.size, "Problem deciding on gpus for sweep"
 
-    lock = Lock()
     async_tasks = []
-    with Pool(processes=n_jobs) as pool:
+    with ProcessPoolExecutor(max_workers=n_jobs) as pool:
+        mgr = Manager()
+        lock = mgr.Lock()
         for snr, device in zip(snrs, devices):
-            res = pool.apply_async(
+            res = pool.submit(
                 score_dataset,
-                (filepath, cfg),
-                {
+                filepath,
+                cfg,
+                **{
                     "snr": snr,
                     "accelerator": accelerator,
                     "device": device,
@@ -240,7 +242,7 @@ def sweep_snr(name: str, cfg: dict, n_jobs: int = 4, accelerator: str | int = "g
             )
             async_tasks.append(res)
 
-    out_container = [task.get() for task in async_tasks]
+    _ = [task.result() for task in async_tasks]
 
 
 def is_int(el: str):
