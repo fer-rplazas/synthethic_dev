@@ -5,7 +5,6 @@ from time import sleep
 import warnings
 
 from joblib import Parallel, delayed
-from multiprocessing import Lock
 import numpy as np
 import pandas as pd
 import pytorch_lightning as pl
@@ -66,7 +65,6 @@ def score_dataset(
     save_to_file=True,
     accelerator: str = "gpu",
     device: list[int] | str = [0],
-    lock: Lock | None = None,
 ):
 
     scores = pd.Series(
@@ -163,12 +161,9 @@ def score_dataset(
 
         sleep(np.random.rand(1)[0] * 4)  # Avoid write conflicts from multiprocessing
 
-        if lock is not None:
-            lock.acquire()
-            df = pd.read_csv(file, index_col=0)
-            df = pd.concat((df, scores.to_frame().T), ignore_index=True)
-            df.to_csv(file)
-            lock.release()
+        df = pd.read_csv(file, index_col=0)
+        df = pd.concat((df, scores.to_frame().T), ignore_index=True)
+        df.to_csv(file)
 
     return scores
 
@@ -204,7 +199,6 @@ def prepare_runs(name: str) -> Path:
 def sweep_snr(name: str, cfg: dict, n_jobs: int = 4, accelerator: str | int = "gpu"):
     """Prepares database, configures accelerators, and launches parallelized sweep across a range or snrs for the configuration specified in `cfg`"""
     filepath = prepare_runs(name)
-    lock = Lock()
 
     snrs = np.repeat(np.arange(0.2, 2, 0.05), 5)
 
@@ -228,7 +222,7 @@ def sweep_snr(name: str, cfg: dict, n_jobs: int = 4, accelerator: str | int = "g
 
     out = Parallel(n_jobs=n_jobs)(
         delayed(score_dataset)(
-            filepath, cfg, snr=snr, accelerator=accelerator, device=device, lock=lock
+            filepath, cfg, snr=snr, accelerator=accelerator, device=device
         )
         for snr, device in zip(snrs, devices)
     )
