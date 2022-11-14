@@ -1,6 +1,6 @@
 import argparse
 from concurrent.futures import ProcessPoolExecutor
-from multiprocessing import Manager
+from multiprocessing import Manager, set_start_method
 import os
 from pathlib import Path
 from time import sleep
@@ -25,6 +25,7 @@ hop_size = 0.4  # Hop size in [s]. Determines overlap between windows
 
 
 DEVICE = "gpu" if is_available() else "cpu"
+set_start_method("spawn")
 
 
 def score_module(module, train_dataloader, valid_dataloader, accelerator, device):
