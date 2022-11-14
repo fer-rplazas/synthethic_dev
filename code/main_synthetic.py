@@ -4,7 +4,7 @@ from pathlib import Path
 from time import sleep
 import warnings
 
-from joblib import Parallel, delayed
+from multiprocessing import Pool, Lock
 import numpy as np
 import pandas as pd
 import pytorch_lightning as pl
@@ -65,6 +65,7 @@ def score_dataset(
     save_to_file=True,
     accelerator: str = "gpu",
     device: list[int] | str = [0],
+    lock: Lock | None = None,
 ):
 
     scores = pd.Series(
@@ -160,10 +161,13 @@ def score_dataset(
     if save_to_file:
 
         sleep(np.random.rand(1)[0] * 4)  # Avoid write conflicts from multiprocessing
-
+        if lock is not None:
+            lock.acquire()
         df = pd.read_csv(file, index_col=0)
         df = pd.concat((df, scores.to_frame().T), ignore_index=True)
         df.to_csv(file)
+        if lock is not None:
+            lock.release()
 
     return scores
 
@@ -220,12 +224,23 @@ def sweep_snr(name: str, cfg: dict, n_jobs: int = 4, accelerator: str | int = "g
 
     assert len(devices) == snrs.size, "Problem deciding on gpus for sweep"
 
-    out = Parallel(n_jobs=n_jobs)(
-        delayed(score_dataset)(
-            filepath, cfg, snr=snr, accelerator=accelerator, device=device
-        )
-        for snr, device in zip(snrs, devices)
-    )
+    lock = Lock()
+    async_tasks = []
+    with Pool(processes=n_jobs) as pool:
+        for snr, device in zip(snrs, devices):
+            res = pool.apply_async(
+                score_dataset,
+                (filepath, cfg),
+                {
+                    "snr": snr,
+                    "accelerator": accelerator,
+                    "device": device,
+                    "lock": lock,
+                },
+            )
+            async_tasks.append(res)
+
+    out_container = [task.get() for task in async_tasks]
 
 
 def is_int(el: str):
