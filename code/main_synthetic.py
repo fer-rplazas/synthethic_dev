@@ -201,11 +201,18 @@ def prepare_runs(name: str) -> Path:
     return filepath
 
 
-def sweep_snr(name: str, cfg: dict, n_jobs: int = 4, accelerator: str | int = "gpu"):
+def sweep_snr(
+    name: str,
+    cfg: dict,
+    n_jobs: int = 4,
+    accelerator: str | int = "gpu",
+    snr_from: float = 0.2,
+    snr_to: float = 2.0,
+):
     """Prepares database, configures accelerators, and launches parallelized sweep across a range or snrs for the configuration specified in `cfg`"""
     filepath = prepare_runs(name)
 
-    snrs = np.repeat(np.arange(0.2, 2, 0.05), 5)
+    snrs = np.repeat(np.arange(snr_from, snr_to, 0.05), 5)
 
     if accelerator == "cpu":
         accelerator = "cpu"
@@ -261,6 +268,8 @@ def main():
     parser.add_argument("--cfg_name", required=False, default=None)
     parser.add_argument("--n_jobs", required=False, default=4, type=int)
     parser.add_argument("--accelerator", required=False, default="gpu", type=str)
+    parser.add_argument("--snr_from", required=False, default=0.2, type=float)
+    parser.add_argument("--snr_to", required=False, default=2.0, type=float)
 
     args = parser.parse_args()
 
@@ -281,6 +290,8 @@ def main():
         configs[args.cfg_name],
         n_jobs=args.n_jobs,
         accelerator=args.accelerator,
+        snr_from=args.snr_from,
+        snr_to=args.snr_to,
     )
 
 
