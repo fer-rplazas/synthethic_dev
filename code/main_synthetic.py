@@ -1,22 +1,23 @@
 import argparse
-from concurrent.futures import ProcessPoolExecutor
-from multiprocessing import Manager, get_context
+from multiprocessing import Manager
 import os
 from pathlib import Path
 from time import sleep
 import warnings
 
-from configs import configs
+from joblib import Parallel
 import numpy as np
 import pandas as pd
 import pytorch_lightning as pl
 from pytorch_lightning.callbacks import ModelCheckpoint
 from pytorch_lightning.utilities.warnings import PossibleUserWarning
+from torch.cuda import device_count, is_available
+
+from configs import configs
 from tools.data_generation import DataGenerator
 from tools.data_processing import Dataset
 from tools.nn_training import Module, ModuleAR
 from tools.svm import SVMClassifier
-from torch.cuda import device_count, is_available
 
 Fs = 2048  # sampling frequency in [Hz]
 T = 1200  # Total simulated dataset length in [s]
@@ -224,27 +225,24 @@ def sweep_snr(name: str, cfg: dict, n_jobs: int = 4, accelerator: str | int = "g
 
     assert len(devices) == snrs.size, "Problem deciding on gpus for sweep"
 
-    async_tasks = []
-    with ProcessPoolExecutor(
-        max_workers=n_jobs, mp_context=get_context("spawn")
-    ) as pool:
-        mgr = Manager()
-        lock = mgr.Lock()
-        for snr, device in zip(snrs, devices):
-            res = pool.submit(
+    parallel = Parallel(n_jobs=n_jobs)
+    mgr = Manager()
+    lock = mgr.Lock()
+    tasks = []  # (f, *args, **kwargs)
+    for snr, device in zip(snrs, devices):
+        tasks.append(
+            (
                 score_dataset,
-                filepath,
-                cfg,
-                **{
+                (filepath, cfg),
+                {
                     "snr": snr,
                     "accelerator": accelerator,
                     "device": device,
                     "lock": lock,
                 },
             )
-            async_tasks.append(res)
-
-    _ = [task.result() for task in async_tasks]
+        )
+    _ = parallel(tasks)
 
 
 def is_int(el: str):
