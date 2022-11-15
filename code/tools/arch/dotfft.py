@@ -16,20 +16,16 @@ class ComplexDotProduct(nn.Module):
     def __init__(self, n_channels: int, n_samp: int, n_out: int):
         super().__init__()
 
-        self.register_parameter(
-            "weight",
-            nn.Parameter(torch.randn(1, n_out, n_channels, n_samp, dtype=torch.cfloat)),
+        self.weight = nn.Parameter(
+            torch.randn(1, n_out, n_channels, n_samp, dtype=torch.cfloat)
         )
-        self.register_parameter(
-            "bias", nn.Parameter(torch.randn(1, n_out, 1, dtype=torch.cfloat))
-        )
+        self.bias = nn.Parameter(torch.randn(1, n_out, 1, dtype=torch.cfloat))
 
     def forward(self, x):
 
         out_channel_acts = [
             torch.sum(w_ * x, dim=1) for w_ in torch.unbind(self.weight, 1)
         ]
-
         return torch.stack(out_channel_acts, dim=1) + self.bias
 
 
@@ -37,17 +33,13 @@ class CustomNorm(nn.Module):
     def __init__(self, n_channels: int, affine: bool = True):
         super().__init__()
         self.affine = affine
-        self.register_parameter(
-            "scale", nn.Parameter(torch.ones(1, n_channels, 1, dtype=torch.cfloat))
-        )
-        self.register_parameter(
-            "offset", nn.Parameter(torch.zeros(1, n_channels, 1, dtype=torch.cfloat))
-        )
+        self.scale = nn.Parameter(torch.ones(1, n_channels, 1, dtype=torch.cfloat))
+        self.offset = nn.Parameter(torch.zeros(1, n_channels, 1, dtype=torch.cfloat))
 
     def forward(self, x):
 
-        z_scored = (x - torch.mean(x, dim=-1, keepdim=True)) / torch.std(
-            x, dim=-1, keepdim=True
+        z_scored = (x - torch.mean(x, dim=[0, -1], keepdim=True)) / torch.std(
+            x, dim=[0, -1], keepdim=True
         )
 
         if self.affine:
