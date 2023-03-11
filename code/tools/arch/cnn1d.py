@@ -6,9 +6,7 @@ class Compressor(nn.Module):
     def __init__(self, n_channels: int, amp: float = 0.0):
 
         super().__init__()
-        self.register_parameter(
-            "slope", nn.Parameter(amp * torch.randn(1, n_channels, 1))
-        )
+        self.slope =  nn.Parameter(amp * torch.randn(1, n_channels, 1))
 
     def forward(self, x):
         eps = 1e-8
@@ -19,29 +17,6 @@ class Compressor(nn.Module):
             * torch.log(torch.abs(x) * slope_ + 1.0)
             / (torch.log(slope_ + 1.0) + eps)
         )
-
-
-class CustomNorm(nn.Module):
-    def __init__(self, n_channels: int, affine: bool = True):
-        super().__init__()
-        self.affine = affine
-        self.register_parameter(
-            "scale", nn.Parameter(torch.ones(1, n_channels, 1, dtype=torch.float))
-        )
-        self.register_parameter(
-            "offset", nn.Parameter(torch.zeros(1, n_channels, 1, dtype=torch.float))
-        )
-
-    def forward(self, x):
-
-        z_scored = (x - torch.mean(x, dim=-1, keepdim=True)) / torch.std(
-            x, dim=-1, keepdim=True
-        )
-
-        if self.affine:
-            return z_scored * self.scale + self.offset
-        return z_scored
-
 
 class CNN1d(nn.Module):
     """Small network with 2 convolutional layers"""

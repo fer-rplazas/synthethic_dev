@@ -82,7 +82,8 @@ def score_dataset(
             "cnn2d_valid",
             "ar_train",
             "ar_valid",
-        ]
+        ],
+        dtype=float,
     )
     scores["snr"] = snr
 
