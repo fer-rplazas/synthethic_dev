@@ -76,6 +76,6 @@ class FeatureExtractor:
             )
             feat_mat = fill_feat_mat(feat_mat, ii, Pxx, X.shape[1], self.freq_idx)
 
-        assert np.isnan(feat_mat).any() == False, "NaNs found after feature extraction"
+        assert np.isnan(feat_mat).any() is False, "NaNs found after feature extraction"
 
         return feat_mat

@@ -101,7 +101,7 @@ class EnsembleAR(nn.Module):
 
 
 class ARModel(nn.Module):
-    def __init__(self, n_channels, n_feats, use_all: bool = True):
+    def __init__(self, n_channels, n_feats):
 
         super().__init__()
 

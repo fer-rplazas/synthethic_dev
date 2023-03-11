@@ -39,7 +39,7 @@ class ConfigGenerator:
                 config[ConfigGenerator.names[jj]] = list(vals)
             else:
                 config[ConfigGenerator.names[jj]] = None
-        if np.array([val == None for val in config.values()]).all():
+        if np.array([val is None for val in config.values()]).all():
             return ConfigGenerator.generate_random_config()
         return config
 
